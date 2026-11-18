@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الصفقة سوريا - المنصة المتكاملة</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Tahoma, Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; color: #333; }
+        header { background-color: #198754; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        header h1 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+        .header-buttons { display: flex; gap: 10px; }
+        .header-buttons button { background: white; color: #198754; border: none; padding: 8px 14px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .container { max-width: 1100px; margin: 20px auto; padding: 0 15px; }
+        
+        /* التبويبات والشاشات */
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* الشاشة الرئيسية والفلاتر */
+        .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filters select, .filters input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; flex: 1; min-width: 140px; }
+        .ads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+        .ad-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.08); transition: transform 0.2s; display: flex; flex-direction: column; cursor: pointer; }
+        .ad-card:hover { transform: translateY(-4px); }
+        .ad-image { width: 100%; height: 180px; object-fit: cover; background-color: #e9ecef; }
+        .ad-content { padding: 15px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .ad-title { font-size: 17px; font-weight: bold; margin: 0 0 8px 0; color: #111; }
+        .ad-price { font-size: 16px; font-weight: bold; color: #198754; margin-bottom: 8px; }
+        .ad-meta { font-size: 13px; color: #666; display: flex; justify-content: space-between; border-top: 1px solid #eee; padding-top: 8px; margin-top: 10px; }
+        
+        /* نماذج الإدخال (تسجيل الدخول وإضافة الإعلانات) */
+        .card { background: white; max-width: 500px; margin: 20px auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #198754; }
+        .card h2 { color: #198754; text-align: center; margin-top: 0; }
+        label { display: block; margin-top: 12px; font-weight: bold; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        textarea { resize: vertical; height: 90px; }
+        .btn-main { width: 100%; padding: 12px; background: #198754; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 15px; font-weight: bold; }
+        .btn-main:hover { background: #146c43; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5c636a; }
+        .btn-toggle { background: #0d6efd; margin-top: 8px; }
+        .btn-toggle:hover { background: #0b5ed7; }
+        .msg { text-align: center; margin-top: 12px; font-weight: bold; font-size: 14px; }
+        .status-msg { text-align: center; padding: 40px; font-size: 16px; color: #666; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🟩⬜⬛ الصفقة سوريا</h1>
+        <div class="header-buttons">
+            <button onclick="showSection('home-section')">الرئيسية</button>
+            <button id="nav-post-btn" onclick="checkAuthAndPost()">➕ أضف إعلاناً</button>
+            <button id="nav-auth-btn" onclick="showAuthModal()">تسجيل الدخول</button>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- 1. واجهة الرئيسية وعرض الإعلانات -->
+        <div id="home-section" class="section active">
+            <div class="filters">
+                <input type="text" id="search-input" placeholder="ابحث عن سيارة، عقار، جوال..." oninput="filterAds()">
+                <select id="city-filter" onchange="filterAds()">
+                    <option value="">كل المحافظات</option>
+                    <option value="دمشق">دمشق</option>
+                    <option value="ريف دمشق">ريف دمشق</option>
+                    <option value="حلب">حلب</option>
+                    <option value="حمص">حمص</option>
+                    <option value="اللاذقية">اللاذقية</option>
+                    <option value="طرطوس">طرطوس</option>
+                    <option value="حماة">حماة</option>
+                    <option value="إدلب">إدلب</option>
+                    <option value="درعا">درعا</option>
+                    <option value="السويداء">السويداء</option>
+                </select>
+            </div>
+            <div id="status-message" class="status-msg">جاري تحميل الإعلانات...</div>
+            <div id="ads-container" class="ads-grid"></div>
+        </div>
+
+        <!-- 2. واجهة تسجيل الدخول / إنشاء حساب -->
+        <div id="auth-section" class="section">
+            <div class="card">
+                <h2 id="auth-title">🟩 تسجيل الدخول</h2>
+                <input type="email" id="auth-email" placeholder="البريد الإلكتروني">
+                <input type="password" id="auth-password" placeholder="كلمة المرور">
+                <button class="btn-main" id="auth-submit-btn" onclick="handleAuth()">دخول</button>
+                <button class="btn-main btn-toggle" onclick="toggleAuthMode()">إنشاء حساب جديد</button>
+                <button class="btn-main btn-secondary" onclick="showSection('home-section')">العودة للرئيسية</button>
+                <p id="auth-msg" class="msg"></p>
+            </div>
+        </div>
+
+        <!-- 3. واجهة إضافة إعلان -->
+        <div id="post-section" class="section">
+            <div class="card">
+                <h2>➕ أضف إعلان جديد</h2>
+                <form id="ad-form" onsubmit="submitAd(event)">
+                    <label>عنوان الإعلان</label>
+                    <input type="text" id="ad-title" required placeholder="مثال: شقة للبيع في دمشق">
+
+                    <label>القسم</label>
+                    <select id="ad-category" required>
+                        <option value="عقارات">عقارات</option>
+                        <option value="سيارات">سيارات</option>
+                        <option value="جوالات وإلكترونيات">جوالات وإلكترونيات</option>
+                        <option value="وظائف وأعمال">وظائف وأعمال</option>
+                        <option value="أثاث ومنزل">أثاث ومنزل</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+
+                    <label>المحافظة</label>
+                    <select id="ad-city" required>
+                        <option value="دمشق">دمشق</option>
+                        <option value="ريف دمشق">ريف دمشق</option>
+                        <option value="حلب">حلب</option>
+                        <option value="حمص">حمص</option>
+                        <option value="اللاذقية">اللاذقية</option>
+                        <option value="طرطوس">طرطوس</option>
+                        <option value="حماة">حماة</option>
+                        <option value="إدلب">إدلب</option>
+                        <option value="درعا">درعا</option>
+                        <option value="السويداء">السويداء</option>
+                    </select>
+
+                    <label>السعر (ل.س)</label>
+                    <input type="number" id="ad-price" required placeholder="مثال: 50000000">
+
+                    <label>رابط الصورة</label>
+                    <input type="url" id="ad-image" placeholder="https://example.com/image.jpg">
+
+                    <label>التفاصيل ووصف الإعلان</label>
+                    <textarea id="ad-desc" placeholder="اكتب تفاصيل السلعة وطريقة التواصل..."></textarea>
+
+                    <button type="submit" class="btn-main">نشر الإعلان</button>
+                    <button type="button" class="btn-main btn-secondary" onclick="showSection('home-section')">العودة للرئيسية</button>
+                </form>
+                <p id="post-msg" class="msg"></p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://hcwkgtpnymxvqoqopltc.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_FXuLIBO3oVHe-aoohbkd_w_QhOvnuzE';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let allAds = [];
+        let isSignUpMode = false;
+        let currentUser = null;
+
+        // إدارة التنقل بين الواجهات داخل الملف الواحد
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+            if (sectionId === 'home-section') {
+                fetchAds();
+            }
+            checkUserSession();
+        }
+
+        async function checkUserSession() {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            currentUser = user;
+            const authBtn = document.getElementById('nav-auth-btn');
+            if (user) {
+                authBtn.innerText = 'خروج';
+                authBtn.onclick = handleLogout;
+            } else {
+                authBtn.innerText = 'تسجيل الدخول';
+                authBtn.onclick = showAuthModal;
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            alert('تم تسجيل الخروج بنجاح');
+            checkUserSession();
+            showSection('home-section');
+        }
+
+        function showAuthModal() {
+            isSignUpMode = false;
+            updateAuthUI();
+            showSection('auth-section');
+        }
+
+        function toggleAuthMode() {
+            isSignUpMode = !isSignUpMode;
+            updateAuthUI();
+        }
+
+        function updateAuthUI() {
+            document.getElementById('auth-title').innerText = isSignUpMode ? '🟩 إنشاء حساب جديد' : '🟩 تسجيل الدخول';
+            document.getElementById('auth-submit-btn').innerText = isSignUpMode ? 'تسجيل' : 'دخول';
+        }
+
+        async function handleAuth() {
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const msgEl = document.getElementById('auth-msg');
+
+            if (!email || !password) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = 'الرجاء إدخال البريد وكلمة المرور';
+                return;
+            }
+
+            if (isSignUpMode) {
+                const { error } = await supabaseClient.auth.signUp({ email, password });
+                if (error) {
+                    msgEl.style.color = 'red';
+                    msgEl.innerText = error.message;
+                } else {
+                    msgEl.style.color = 'green';
+                    msgEl.innerText = 'تم التسجيل بنجاح! يمكنك الدخول الآن.';
+                }
+            } else {
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) {
+                    msgEl.style.color = 'red';
+                    msgEl.innerText = error.message;
+                } else {
+                    msgEl.style.color = 'green';
+                    msgEl.innerText = 'تم تسجيل الدخول بنجاح!';
+                    setTimeout(() => {
+                        showSection('home-section');
+                    }, 1000);
+                }
+            }
+        }
+
+        async function checkAuthAndPost() {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) {
+                alert('يجب تسجيل الدخول أولاً لنشر إعلان!');
+                showAuthModal();
+                return;
+            }
+            showSection('post-section');
+        }
+
+        async function fetchAds() {
+            const statusEl = document.getElementById('status-message');
+            statusEl.style.display = 'block';
+            statusEl.innerText = 'جاري تحميل الإعلانات...';
+
+            const { data, error } = await supabaseClient
+                .from('ads')
+                .select('*')
+                .eq('status', 'active')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                statusEl.innerText = 'حدث خطأ أثناء تحميل الإعلانات: ' + error.message;
+                return;
+            }
+
+            allAds = data || [];
+            renderAds(allAds);
+        }
+
+        function renderAds(adsList) {
+            const container = document.getElementById('ads-container');
+            const statusEl = document.getElementById('status-message');
+            container.innerHTML = '';
+
+            if (adsList.length === 0) {
+                statusEl.style.display = 'block';
+                statusEl.innerText = 'لا توجد إعلانات متاحة حالياً.';
+                return;
+            }
+
+            statusEl.style.display = 'none';
+
+            adsList.forEach(ad => {
+                const imageUrl = (ad.images && ad.images.length > 0) ? ad.images[0] : 'https://via.placeholder.com/400x250?text=لا+توجد+صورة';
+                const card = document.createElement('div');
+                card.className = 'ad-card';
+                card.innerHTML = `
+                    <img src="${imageUrl}" alt="${ad.title}" class="ad-image">
+                    <div class="ad-content">
+                        <div>
+                            <h3 class="ad-title">${ad.title}</h3>
+                            <div class="ad-price">${Number(ad.price).toLocaleString()} ${ad.currency || 'ل.س'}</div>
+                        </div>
+                        <div class="ad-meta">
+                            <span>📍 ${ad.city}</span>
+                            <span>🏷️ ${ad.category}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function filterAds() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const selectedCity = document.getElementById('city-filter').value;
+
+            const filtered = allAds.filter(ad => {
+                const matchesSearch = ad.title.toLowerCase().includes(searchTerm) || (ad.description && ad.description.toLowerCase().includes(searchTerm));
+                const matchesCity = selectedCity === '' || ad.city === selectedCity;
+                return matchesSearch && matchesCity;
+            });
+
+            renderAds(filtered);
+        }
+
+        async function submitAd(e) {
+            e.preventDefault();
+            const msgEl = document.getElementById('post-msg');
+
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً.';
+                return;
+            }
+
+            const title = document.getElementById('ad-title').value;
+            const category = document.getElementById('ad-category').value;
+            const city = document.getElementById('ad-city').value;
+            const price = parseFloat(document.getElementById('ad-price').value);
+            const imageUrl = document.getElementById('ad-image').value;
+            const description = document.getElementById('ad-desc').value;
+
+            const imagesArray = imageUrl ? [imageUrl] : [];
+
+            const { error } = await supabaseClient.from('ads').insert([
+                {
+                    title,
+                    category,
+                    city,
+                    price,
+                    currency: 'ل.س',
+                    images: imagesArray,
+                    description,
+                    user_id: user.id,
+                    status: 'active'
+                }
+            ]);
+
+            if (error) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = 'خطأ أثناء النشر: ' + error.message;
+            } else {
+                msgEl.style.color = 'green';
+                msgEl.innerText = 'تم نشر إعلانك بنجاح!';
+                setTimeout(() => {
+                    document.getElementById('ad-form').reset();
+                    showSection('home-section');
+                }, 1200);
+            }
+        }
+
+        // تشغيل أولي
+        checkUserSession();
+        fetchAds();
+    </script>
+</body>
+</html>
